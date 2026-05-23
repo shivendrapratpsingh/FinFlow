@@ -9,25 +9,41 @@ from sqlalchemy import Column, DateTime, func, String
 import uuid
 
 from app.core.config import settings
+import re as _re
 
 
-def _normalize_db_url(url: str) -> str:
-    """Accept any Postgres URL format and return postgresql+asyncpg://"""
-    url = url.strip()
-    url = url.replace("channel_binding=require", "").replace("sslmode=require", "ssl=require")
-    url = url.replace("&&", "&").replace("?&", "?").rstrip("?&")
+def _prepare_db(raw: str):
+    """
+    Accept ANY Postgres URL from Neon/Railway/etc and return
+    (clean_url, connect_args) ready for asyncpg.
+    Strips all SSL/channel_binding params from the URL and
+    passes ssl via connect_args instead.
+    """
+    url = raw.strip()
+
+    # Detect if SSL is needed (Neon always needs it)
+    needs_ssl = any(k in url for k in ("sslmode", "ssl=", "neon.tech", "channel_binding"))
+
+    # Strip ALL query params that asyncpg doesn't understand in URL form
+    url = _re.sub(r"[?&](sslmode|ssl|channel_binding|options)=[^&]*", "", url)
+    url = url.rstrip("?&")
+
+    # Fix scheme → postgresql+asyncpg://
     if url.startswith("postgres://"):
         url = "postgresql+asyncpg://" + url[len("postgres://"):]
     elif url.startswith("postgresql://") and "+asyncpg" not in url:
         url = "postgresql+asyncpg://" + url[len("postgresql://"):]
-    return url
+
+    connect_args = {"ssl": "require"} if needs_ssl else {}
+    return url, connect_args
 
 
-_db_url = _normalize_db_url(settings.DATABASE_URL)
+_db_url, _connect_args = _prepare_db(settings.DATABASE_URL)
 
 # ── Engine ───────────────────────────────────────────────────
 engine = create_async_engine(
     _db_url,
+    connect_args=_connect_args,
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,
