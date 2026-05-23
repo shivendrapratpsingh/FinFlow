@@ -3,7 +3,6 @@ const nextConfig = {
   reactStrictMode: true,
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
-
   images: {
     remotePatterns: [
       { protocol: "http", hostname: "localhost" },
@@ -14,8 +13,6 @@ const nextConfig = {
     ],
     formats: ["image/avif", "image/webp"],
   },
-
-  // Security headers
   async headers() {
     return [
       {
@@ -24,4 +21,11 @@ const nextConfig = {
           { key: "X-DNS-Prefetch-Control", value: "on" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
+};
+
+module.exports = nextConfig;
