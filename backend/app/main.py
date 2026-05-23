@@ -27,13 +27,13 @@ ADMIN_NAME = "Shivendra Pratap"
 # -- Lifespan --
 async def _seed_admin():
     """Ensure admin account exists with correct password on every boot."""
-    import uuid
     import base64
     import hashlib
     import bcrypt
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import sessionmaker
-    from sqlalchemy import text
+    from sqlalchemy import select
+    from app.db.models.user import User, Business, BusinessMember, UserRole, AuthProvider
 
     def hash_pw(password: str) -> str:
         digest = base64.b64encode(hashlib.sha256(password.encode()).digest())
@@ -42,72 +42,44 @@ async def _seed_admin():
     Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with Session() as db:
         # Check if admin already exists
-        row = await db.execute(
-            text("SELECT id FROM users WHERE email = :email"),
-            {"email": ADMIN_EMAIL},
-        )
-        existing = row.fetchone()
+        result = await db.execute(select(User).where(User.email == ADMIN_EMAIL))
+        user = result.scalar_one_or_none()
         hashed = hash_pw(ADMIN_PASSWORD)
 
-        if existing:
-            # Always refresh the admin password so it matches our seed
-            # NOTE: auth_provider is a PostgreSQL enum — must CAST explicitly
-            await db.execute(
-                text(
-                    "UPDATE users SET hashed_password = :pwd, is_verified = true, "
-                    "is_active = true, auth_provider = CAST(:provider AS authprovider) "
-                    "WHERE email = :email"
-                ),
-                {"pwd": hashed, "provider": "email", "email": ADMIN_EMAIL},
-            )
+        if user:
+            # Refresh password every boot so it always matches
+            user.hashed_password = hashed
+            user.is_verified = True
+            user.is_active = True
+            user.auth_provider = AuthProvider.EMAIL
             await db.commit()
             logger.info("Admin password refreshed for %s", ADMIN_EMAIL)
             return
 
-        # First boot — create everything from scratch
-        user_id = str(uuid.uuid4())
-        biz_id = str(uuid.uuid4())
-        mem_id = str(uuid.uuid4())
-
-        # NOTE: auth_provider is a PostgreSQL enum — must CAST explicitly
-        await db.execute(
-            text(
-                "INSERT INTO users "
-                "(id, email, full_name, hashed_password, is_verified, "
-                "is_active, auth_provider, language, created_at, updated_at) "
-                "VALUES (:id, :email, :name, :pwd, true, true, "
-                "CAST(:provider AS authprovider), :lang, "
-                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ),
-            {
-                "id": user_id,
-                "email": ADMIN_EMAIL,
-                "name": ADMIN_NAME,
-                "pwd": hashed,
-                "provider": "email",
-                "lang": "en",
-            },
+        # First boot — create user, business, membership via ORM
+        user = User(
+            email=ADMIN_EMAIL,
+            full_name=ADMIN_NAME,
+            hashed_password=hashed,
+            auth_provider=AuthProvider.EMAIL,
+            is_verified=True,
+            is_active=True,
+            language="en",
         )
+        db.add(user)
+        await db.flush()
 
-        await db.execute(
-            text(
-                "INSERT INTO businesses (id, name, created_at, updated_at) "
-                "VALUES (:id, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ),
-            {"id": biz_id, "name": "My Business"},
+        business = Business(name="My Business")
+        db.add(business)
+        await db.flush()
+
+        membership = BusinessMember(
+            user_id=user.id,
+            business_id=business.id,
+            role=UserRole.OWNER,
+            is_default=True,
         )
-
-        # NOTE: role is a PostgreSQL enum — must CAST explicitly
-        await db.execute(
-            text(
-                "INSERT INTO business_members "
-                "(id, user_id, business_id, role, is_default, created_at, updated_at) "
-                "VALUES (:id, :uid, :bid, CAST(:role AS userrole), true, "
-                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ),
-            {"id": mem_id, "uid": user_id, "bid": biz_id, "role": "owner"},
-        )
-
+        db.add(membership)
         await db.commit()
         logger.info("Admin account created: %s", ADMIN_EMAIL)
 

@@ -355,11 +355,13 @@ async def login_json(
 
 
 
+
 @router.get("/debug-reset-admin")
 async def debug_reset_admin(db: AsyncSession = Depends(get_db)):
-    """ONE-TIME: Force-reset admin password. Remove after first login."""
-    import base64, hashlib, bcrypt, uuid
-    from sqlalchemy import text
+    """ONE-TIME: Force-reset admin password via ORM. Remove after first login."""
+    import base64, hashlib, bcrypt
+    from sqlalchemy import select
+    from app.db.models.user import User, Business, BusinessMember, UserRole, AuthProvider
 
     admin_email = "pratapsinghshivendra21@gmail.com"
 
@@ -369,46 +371,41 @@ async def debug_reset_admin(db: AsyncSession = Depends(get_db)):
 
     hashed = hash_pw("FinFlow@123")
 
-    result = await db.execute(
-        text(
-            "UPDATE users SET hashed_password = :pwd, is_verified = true, is_active = true, "
-            "auth_provider = CAST(:prov AS authprovider) WHERE email = :email"
-        ),
-        {"pwd": hashed, "prov": "email", "email": admin_email},
-    )
+    result = await db.execute(select(User).where(User.email == admin_email))
+    user = result.scalar_one_or_none()
 
-    if result.rowcount == 0:
-        uid = str(uuid.uuid4())
-        bid = str(uuid.uuid4())
-        mid = str(uuid.uuid4())
-        await db.execute(
-            text(
-                "INSERT INTO users "
-                "(id, email, full_name, hashed_password, is_verified, is_active, auth_provider, language, created_at, updated_at) "
-                "VALUES (:id, :email, :name, :pwd, true, true, CAST(:prov AS authprovider), :lang, "
-                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ),
-            {"id": uid, "email": admin_email, "name": "Shivendra Pratap",
-             "pwd": hashed, "prov": "email", "lang": "en"},
-        )
-        await db.execute(
-            text(
-                "INSERT INTO businesses (id, name, created_at, updated_at) "
-                "VALUES (:id, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ),
-            {"id": bid, "name": "My Business"},
-        )
-        await db.execute(
-            text(
-                "INSERT INTO business_members "
-                "(id, user_id, business_id, role, is_default, created_at, updated_at) "
-                "VALUES (:id, :uid, :bid, CAST(:role AS userrole), true, "
-                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ),
-            {"id": mid, "uid": uid, "bid": bid, "role": "owner"},
-        )
+    if user:
+        user.hashed_password = hashed
+        user.is_verified = True
+        user.is_active = True
+        user.auth_provider = AuthProvider.EMAIL
         await db.commit()
-        return {"status": "created", "email": admin_email, "password": "FinFlow@123"}
+        return {"status": "reset", "email": admin_email, "password": "FinFlow@123"}
 
+    import uuid as _uuid
+    user = User(
+        email=admin_email,
+        full_name="Shivendra Pratap",
+        hashed_password=hashed,
+        auth_provider=AuthProvider.EMAIL,
+        is_verified=True,
+        is_active=True,
+        language="en",
+    )
+    db.add(user)
+    await db.flush()
+
+    from app.db.models.user import Business, BusinessMember
+    biz = Business(name="My Business")
+    db.add(biz)
+    await db.flush()
+
+    mem = BusinessMember(
+        user_id=user.id,
+        business_id=biz.id,
+        role=UserRole.OWNER,
+        is_default=True,
+    )
+    db.add(mem)
     await db.commit()
-    return {"status": "reset", "email": admin_email, "password": "FinFlow@123"}
+    return {"status": "created", "email": admin_email, "password": "FinFlow@123"}
