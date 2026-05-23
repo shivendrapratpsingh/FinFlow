@@ -21,13 +21,62 @@ logger = logging.getLogger("finflow")
 
 
 # ── Lifespan ─────────────────────────────────────────────────
+async def _seed_admin():
+    """Create admin account on first boot if no users exist."""
+    import uuid, base64, hashlib, bcrypt
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy import text
+    from app.db.models.user import User, Business, BusinessMember, UserRole
+
+    Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with Session() as db:
+        row = (await db.execute(text("SELECT COUNT(*) FROM users"))).scalar()
+        if row and row > 0:
+            return  # Already has users
+
+        def hash_pw(password):
+            digest = base64.b64encode(hashlib.sha256(password.encode()).digest())
+            return bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
+
+        user_id  = str(uuid.uuid4())
+        biz_id   = str(uuid.uuid4())
+        mem_id   = str(uuid.uuid4())
+        hashed   = hash_pw("FinFlow@123")
+
+        await db.execute(text("""
+            INSERT INTO users (id, email, full_name, hashed_password, is_verified,
+                               is_active, auth_provider, language, created_at, updated_at)
+            VALUES (:id, :email, :name, :pwd, true, true, 'email', 'en',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """), {"id": user_id, "email": "pratapsinghshivendra21@gmail.com",
+               "name": "Shivendra Pratap", "pwd": hashed})
+
+        await db.execute(text("""
+            INSERT INTO businesses (id, name, created_at, updated_at)
+            VALUES (:id, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """), {"id": biz_id, "name": "My Business"})
+
+        await db.execute(text("""
+            INSERT INTO business_members (id, user_id, business_id, role, is_default,
+                                          created_at, updated_at)
+            VALUES (:id, :uid, :bid, 'owner', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """), {"id": mem_id, "uid": user_id, "bid": biz_id})
+
+        await db.commit()
+        logger.info("✓ Admin account seeded: pratapsinghshivendra21@gmail.com / FinFlow@123")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"FinFlow {settings.APP_VERSION} starting ({settings.APP_ENV})")
-    # Auto-create tables (SQLite dev) or use Alembic in production
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ready")
+    try:
+        await _seed_admin()
+    except Exception as e:
+        logger.warning(f"Seed skipped: {e}")
     yield
     logger.info("FinFlow shutting down")
     await engine.dispose()
@@ -59,6 +108,10 @@ A modern alternative to Tally with AI-first features.
 # ── CORS ─────────────────────────────────────────────────────
 def _parse_origins(raw: str) -> list:
     raw = raw.strip()
+    if not raw:
+        return ["*"]
+    if raw == "*":
+        return ["*"]
     if raw.startswith("["):
         try:
             return json.loads(raw)
@@ -66,9 +119,11 @@ def _parse_origins(raw: str) -> list:
             pass
     return [o.strip().strip("\"'") for o in raw.split(",") if o.strip()]
 
+_origins = _parse_origins(settings.ALLOWED_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_parse_origins(settings.ALLOWED_ORIGINS),
+    allow_origins=_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app" if "*" not in _origins else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,13 +150,4 @@ async def health_check():
 @app.get("/ping", tags=["Health"])
 async def ping():
     """Keep-alive for Render free tier (use cron-job.org to ping every 14 min)."""
-    return "pong"
-
-
-@app.get("/", tags=["Root"])
-async def root():
-    return {
-        "message": "Welcome to FinFlow API",
-        "docs": "/docs",
-        "version": settings.APP_VERSION,
-    }
+    return "pong
