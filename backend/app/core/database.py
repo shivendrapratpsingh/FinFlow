@@ -17,7 +17,7 @@ engine = create_async_engine(
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,
-    echo=settings.DEBUG,
+    echo=(settings.APP_ENV == "development"),
     future=True,
 )
 

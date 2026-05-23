@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "FinFlow"
     APP_ENV: str = "development"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
+
+    @property
+    def DEBUG(self) -> bool:
+        return self.APP_ENV == "development"
 
     # ── Database ─────────────────────────────────────────────
     DATABASE_URL: str
