@@ -1,0 +1,67 @@
+# ================================================================
+# FinFlow Backend — Python Dependencies
+# Using loose versions to avoid Docker build conflicts
+# ================================================================
+
+# ── Web Framework ─────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+gunicorn
+python-multipart
+httpx
+
+# ── Database ──────────────────────────────────────────────────
+sqlalchemy[asyncio]
+asyncpg
+alembic
+
+# ── Redis ─────────────────────────────────────────────────────
+redis[hiredis]
+
+# ── Auth / Security ───────────────────────────────────────────
+python-jose[cryptography]
+bcrypt
+cryptography
+
+# ── Validation ────────────────────────────────────────────────
+pydantic>=2.0
+pydantic-settings>=2.0
+email-validator
+
+# ── AI / LLM ──────────────────────────────────────────────────
+openai>=1.0
+langchain
+langchain-openai
+langchain-community
+tiktoken
+
+# ── PDF & Documents ───────────────────────────────────────────
+reportlab
+jinja2
+Pillow
+
+# ── Data ──────────────────────────────────────────────────────
+openpyxl
+pandas
+
+# ── Background Tasks ──────────────────────────────────────────
+celery[redis]
+
+# ── Payments ──────────────────────────────────────────────────
+razorpay
+
+# ── HTTP / Async ──────────────────────────────────────────────
+aiohttp
+aiofiles
+requests
+
+# ── QR Code ───────────────────────────────────────────────────
+qrcode[pil]
+
+# ── Logging ───────────────────────────────────────────────────
+loguru
+
+# ── Testing ───────────────────────────────────────────────────
+pytest
+pytest-asyncio
+faker
