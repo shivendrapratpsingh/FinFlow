@@ -19,10 +19,14 @@ from app.middleware.rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger("finflow")
 
+ADMIN_EMAIL = "pratapsinghshivendra21@gmail.com"
+ADMIN_PASSWORD = "FinFlow@123"
+ADMIN_NAME = "Shivendra Pratap"
+
 
 # -- Lifespan --
 async def _seed_admin():
-    """Create admin account on first boot if no users exist."""
+    """Ensure admin account exists with correct password on every boot."""
     import uuid
     import base64
     import hashlib
@@ -31,20 +35,38 @@ async def _seed_admin():
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy import text
 
+    def hash_pw(password: str) -> str:
+        digest = base64.b64encode(hashlib.sha256(password.encode()).digest())
+        return bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
+
     Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with Session() as db:
-        row = (await db.execute(text("SELECT COUNT(*) FROM users"))).scalar()
-        if row and row > 0:
-            return  # Already has users
+        # Check if admin already exists
+        row = await db.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": ADMIN_EMAIL},
+        )
+        existing = row.fetchone()
 
-        def hash_pw(password):
-            digest = base64.b64encode(hashlib.sha256(password.encode()).digest())
-            return bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
+        hashed = hash_pw(ADMIN_PASSWORD)
 
+        if existing:
+            # Always refresh the admin password so it matches our seed
+            await db.execute(
+                text(
+                    "UPDATE users SET hashed_password = :pwd, is_verified = true, "
+                    "is_active = true, auth_provider = :provider WHERE email = :email"
+                ),
+                {"pwd": hashed, "provider": "email", "email": ADMIN_EMAIL},
+            )
+            await db.commit()
+            logger.info("Admin password refreshed for %s", ADMIN_EMAIL)
+            return
+
+        # First boot — create everything from scratch
         user_id = str(uuid.uuid4())
         biz_id = str(uuid.uuid4())
         mem_id = str(uuid.uuid4())
-        hashed = hash_pw("FinFlow@123")
 
         await db.execute(
             text(
@@ -56,8 +78,8 @@ async def _seed_admin():
             ),
             {
                 "id": user_id,
-                "email": "pratapsinghshivendra21@gmail.com",
-                "name": "Shivendra Pratap",
+                "email": ADMIN_EMAIL,
+                "name": ADMIN_NAME,
                 "pwd": hashed,
                 "provider": "email",
                 "lang": "en",
@@ -82,7 +104,7 @@ async def _seed_admin():
         )
 
         await db.commit()
-        logger.info("Admin account seeded: pratapsinghshivendra21@gmail.com / FinFlow@123")
+        logger.info("Admin account created: %s", ADMIN_EMAIL)
 
 
 @asynccontextmanager
