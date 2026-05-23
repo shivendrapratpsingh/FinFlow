@@ -42,7 +42,7 @@ export const useAuthStore = create<AuthState>()(
         Cookies.set("access_token", access, {
           expires: 1,
           secure: process.env.NODE_ENV === "production",
-          sameSite: "strict",
+          sameSite: "lax",
         });
         set({ accessToken: access, refreshToken: refresh, isAuthenticated: true });
       },

@@ -64,7 +64,8 @@ export default function LoginPage() {
       setUser(res.data.user);
       if (res.data.business_id) setBusinessId(res.data.business_id);
       toast.success(`Welcome back, ${res.data.user.full_name}!`);
-      router.push("/dashboard");
+      // Hard redirect so middleware reads the fresh cookie
+      window.location.href = "/dashboard";
     } catch (err: any) {
       toast.error(parseApiError(err, "Login failed"));
     } finally {

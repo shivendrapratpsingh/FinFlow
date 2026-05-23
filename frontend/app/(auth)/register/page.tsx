@@ -61,7 +61,7 @@ export default function RegisterPage() {
       setUser(res.data.user);
       if (res.data.business_id) setBusinessId(res.data.business_id);
       toast.success("Welcome to FinFlow!");
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       toast.error(parseApiError(err, "Registration failed"));
     } finally {
