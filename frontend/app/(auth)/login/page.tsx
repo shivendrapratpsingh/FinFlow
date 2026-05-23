@@ -54,11 +54,9 @@ export default function LoginPage() {
   const onEmailLogin = async (data: EmailForm) => {
     setIsLoading(true);
     try {
-      const formData = new URLSearchParams();
-      formData.append("username", data.email);
-      formData.append("password", data.password);
-      const res = await apiClient.post("/auth/login", formData, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      const res = await apiClient.post("/auth/login-json", {
+        email: data.email,
+        password: data.password,
       });
       setTokens(res.data.access_token, res.data.refresh_token);
       setUser(res.data.user);

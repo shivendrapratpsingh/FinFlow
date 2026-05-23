@@ -311,3 +311,44 @@ async def google_auth(
         user=UserResponse.model_validate(user),
         business_id=None,
     )
+
+
+@router.post("/login-json", response_model=UserLoginResponse)
+async def login_json(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Login with JSON body (email + password). Alternative to OAuth2 form."""
+    email = payload.get("email", "")
+    password = payload.get("password", "")
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(password, user.hashed_password or ""):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Account is deactivated")
+
+    result = await db.execute(
+        select(BusinessMember).where(
+            BusinessMember.user_id == user.id,
+            BusinessMember.is_default == True,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    business_id = str(membership.business_id) if membership else None
+
+    token = create_access_token(user.id, business_id)
+    refresh = create_refresh_token(user.id)
+
+    return UserLoginResponse(
+        access_token=token,
+        refresh_token=refresh,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+        business_id=business_id,
+    )

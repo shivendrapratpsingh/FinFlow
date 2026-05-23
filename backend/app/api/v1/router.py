@@ -13,6 +13,7 @@ from app.api.v1.gst.routes import router as gst_router
 from app.api.v1.reports.routes import router as reports_router
 from app.api.v1.ai.routes import router as ai_router
 from app.api.v1.payments.routes import router as payments_router
+from app.api.v1.admin.routes import router as admin_router
 
 api_router = APIRouter()
 
@@ -25,3 +26,4 @@ api_router.include_router(gst_router,        prefix="/gst",        tags=["GST & 
 api_router.include_router(reports_router,    prefix="/reports",    tags=["Reports"])
 api_router.include_router(ai_router,         prefix="/ai",         tags=["AI Assistant"])
 api_router.include_router(payments_router,   prefix="/payments",   tags=["Payments"])
+api_router.include_router(admin_router,       prefix="/admin",       tags=["Admin"])

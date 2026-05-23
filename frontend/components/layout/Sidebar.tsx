@@ -8,10 +8,11 @@ import {
   LayoutDashboard, FileText, Package, BookOpen,
   BarChart3, Receipt, Sparkles, Settings, ChevronLeft,
   ChevronRight, Building2, LogOut, Bell, HelpCircle,
-  PlusCircle, Users, ShoppingCart,
+  PlusCircle, Users, ShoppingCart, Shield, Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/slices/authStore";
+import { apiClient } from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -167,9 +168,58 @@ function NavItem({ item, collapsed, depth = 0 }: NavItemProps) {
 }
 
 
+const ADMIN_EMAIL = "pratapsinghshivendra21@gmail.com";
+
+function RatingModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (r: number, c: string) => void }) {
+  const [rating, setRating] = useState(0);
+  const [hovered, setHovered] = useState(0);
+  const [comment, setComment] = useState("");
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"white",borderRadius:16,padding:"32px",width:360,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+        <h2 style={{fontSize:20,fontWeight:700,color:"#111",marginBottom:4}}>Rate FinFlow</h2>
+        <p style={{fontSize:14,color:"#6b7280",marginBottom:20}}>How was your experience? Your feedback helps us improve.</p>
+        <div style={{display:"flex",gap:8,marginBottom:16,justifyContent:"center"}}>
+          {[1,2,3,4,5].map(s => (
+            <button key={s} onClick={() => setRating(s)} onMouseEnter={() => setHovered(s)} onMouseLeave={() => setHovered(0)}
+              style={{fontSize:36,background:"none",border:"none",cursor:"pointer",color:(hovered||rating)>=s?"#f59e0b":"#d1d5db",transition:"color 0.1s"}}>★</button>
+          ))}
+        </div>
+        {rating > 0 && (
+          <p style={{textAlign:"center",fontSize:13,color:"#6366f1",marginBottom:12,fontWeight:500}}>
+            {["","Poor","Fair","Good","Very Good","Excellent!"][rating]}
+          </p>
+        )}
+        <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Any comments? (optional)"
+          style={{width:"100%",border:"1px solid #e5e7eb",borderRadius:8,padding:"10px 12px",fontSize:14,resize:"none",height:80,fontFamily:"inherit",boxSizing:"border-box"}} />
+        <div style={{display:"flex",gap:8,marginTop:16}}>
+          <button onClick={onClose} style={{flex:1,padding:"10px",border:"1px solid #e5e7eb",borderRadius:8,fontSize:14,cursor:"pointer",background:"white",color:"#374151"}}>Skip</button>
+          <button onClick={() => onSubmit(rating, comment)} disabled={rating === 0}
+            style={{flex:1,padding:"10px",border:"none",borderRadius:8,fontSize:14,cursor:rating===0?"not-allowed":"pointer",background:rating===0?"#e5e7eb":"#6366f1",color:rating===0?"#9ca3af":"white",fontWeight:600}}>
+            Submit & Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, logout } = useAuthStore();
+  const [showRating, setShowRating] = useState(false);
+  const { user, logout, accessToken } = useAuthStore();
+
+  const handleLogoutClick = () => setShowRating(true);
+
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    try {
+      if (rating > 0) {
+        await apiClient.post("/admin/rate", { rating, comment });
+      }
+    } catch {}
+    setShowRating(false);
+    logout();
+  };
 
   return (
     <motion.aside
@@ -238,6 +288,9 @@ export function Sidebar() {
 
       {/* Bottom Actions */}
       <div className="border-t border-border px-3 py-3 space-y-1">
+        {user?.email === ADMIN_EMAIL && (
+          <NavItem item={{ label: "Admin Console", href: "/admin", icon: Shield }} collapsed={collapsed} />
+        )}
         <NavItem
           item={{ label: "Settings", href: "/settings/profile", icon: Settings }}
           collapsed={collapsed}
@@ -250,7 +303,7 @@ export function Sidebar() {
         {/* User profile */}
         <div
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 mt-2"
-          onClick={logout}
+          onClick={handleLogoutClick}
         >
           <Avatar className="w-7 h-7 flex-shrink-0">
             <AvatarImage src={user?.avatar_url} />
@@ -276,6 +329,7 @@ export function Sidebar() {
           {!collapsed && <LogOut size={14} className="text-muted-foreground flex-shrink-0" />}
         </div>
       </div>
+      {showRating && <RatingModal onClose={() => { setShowRating(false); logout(); }} onSubmit={handleRatingSubmit} />}
     </motion.aside>
   );
 }
