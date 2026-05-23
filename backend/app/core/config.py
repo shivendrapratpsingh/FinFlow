@@ -21,22 +21,6 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
 
-    @property
-    def ASYNC_DATABASE_URL(self) -> str:
-        """Normalize any Postgres URL to postgresql+asyncpg:// format."""
-        url = self.DATABASE_URL.strip()
-        # Remove unsupported asyncpg params
-        url = url.replace("channel_binding=require", "").replace("sslmode=require", "ssl=require")
-        url = url.replace("&&", "&").replace("?&", "?").rstrip("?&")
-        # Fix scheme
-        if url.startswith("postgres://"):
-            url = "postgresql+asyncpg://" + url[len("postgres://"):]
-        elif url.startswith("postgresql://"):
-            url = "postgresql+asyncpg://" + url[len("postgresql://"):]
-        elif not url.startswith("postgresql+asyncpg://"):
-            url = "postgresql+asyncpg://" + url
-        return url
-
     # ── Redis ────────────────────────────────────────────────
     REDIS_URL: str = ""
     REDIS_CACHE_TTL: int = 3600

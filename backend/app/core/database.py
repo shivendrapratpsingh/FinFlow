@@ -11,9 +11,23 @@ import uuid
 from app.core.config import settings
 
 
+def _normalize_db_url(url: str) -> str:
+    """Accept any Postgres URL format and return postgresql+asyncpg://"""
+    url = url.strip()
+    url = url.replace("channel_binding=require", "").replace("sslmode=require", "ssl=require")
+    url = url.replace("&&", "&").replace("?&", "?").rstrip("?&")
+    if url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://") and "+asyncpg" not in url:
+        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+    return url
+
+
+_db_url = _normalize_db_url(settings.DATABASE_URL)
+
 # ── Engine ───────────────────────────────────────────────────
 engine = create_async_engine(
-    settings.ASYNC_DATABASE_URL,
+    _db_url,
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,
