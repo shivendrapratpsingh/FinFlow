@@ -1,5 +1,5 @@
 """
-FinFlow — Main FastAPI Application
+FinFlow - Main FastAPI Application
 AI-powered accounting platform for Indian small businesses.
 Free-tier ready: runs on SQLite locally, PostgreSQL on Render/Neon.
 """
@@ -20,14 +20,16 @@ from app.middleware.rate_limit import RateLimitMiddleware
 logger = logging.getLogger("finflow")
 
 
-# ── Lifespan ─────────────────────────────────────────────────
+# -- Lifespan --
 async def _seed_admin():
     """Create admin account on first boot if no users exist."""
-    import uuid, base64, hashlib, bcrypt
+    import uuid
+    import base64
+    import hashlib
+    import bcrypt
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy import text
-    from app.db.models.user import User, Business, BusinessMember, UserRole
 
     Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with Session() as db:
@@ -39,32 +41,48 @@ async def _seed_admin():
             digest = base64.b64encode(hashlib.sha256(password.encode()).digest())
             return bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
 
-        user_id  = str(uuid.uuid4())
-        biz_id   = str(uuid.uuid4())
-        mem_id   = str(uuid.uuid4())
-        hashed   = hash_pw("FinFlow@123")
+        user_id = str(uuid.uuid4())
+        biz_id = str(uuid.uuid4())
+        mem_id = str(uuid.uuid4())
+        hashed = hash_pw("FinFlow@123")
 
-        await db.execute(text("""
-            INSERT INTO users (id, email, full_name, hashed_password, is_verified,
-                               is_active, auth_provider, language, created_at, updated_at)
-            VALUES (:id, :email, :name, :pwd, true, true, 'email', 'en',
-                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """), {"id": user_id, "email": "pratapsinghshivendra21@gmail.com",
-               "name": "Shivendra Pratap", "pwd": hashed})
+        await db.execute(
+            text(
+                "INSERT INTO users "
+                "(id, email, full_name, hashed_password, is_verified, "
+                "is_active, auth_provider, language, created_at, updated_at) "
+                "VALUES (:id, :email, :name, :pwd, true, true, :provider, :lang, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {
+                "id": user_id,
+                "email": "pratapsinghshivendra21@gmail.com",
+                "name": "Shivendra Pratap",
+                "pwd": hashed,
+                "provider": "email",
+                "lang": "en",
+            },
+        )
 
-        await db.execute(text("""
-            INSERT INTO businesses (id, name, created_at, updated_at)
-            VALUES (:id, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """), {"id": biz_id, "name": "My Business"})
+        await db.execute(
+            text(
+                "INSERT INTO businesses (id, name, created_at, updated_at) "
+                "VALUES (:id, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": biz_id, "name": "My Business"},
+        )
 
-        await db.execute(text("""
-            INSERT INTO business_members (id, user_id, business_id, role, is_default,
-                                          created_at, updated_at)
-            VALUES (:id, :uid, :bid, 'owner', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """), {"id": mem_id, "uid": user_id, "bid": biz_id})
+        await db.execute(
+            text(
+                "INSERT INTO business_members "
+                "(id, user_id, business_id, role, is_default, created_at, updated_at) "
+                "VALUES (:id, :uid, :bid, :role, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": mem_id, "uid": user_id, "bid": biz_id, "role": "owner"},
+        )
 
         await db.commit()
-        logger.info("✓ Admin account seeded: pratapsinghshivendra21@gmail.com / FinFlow@123")
+        logger.info("Admin account seeded: pratapsinghshivendra21@gmail.com / FinFlow@123")
 
 
 @asynccontextmanager
@@ -82,22 +100,10 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-# ── App ──────────────────────────────────────────────────────
+# -- App --
 app = FastAPI(
     title="FinFlow API",
-    description="""
-## FinFlow — AI-Powered Accounting for Indian Small Businesses
-
-A modern alternative to Tally with AI-first features.
-
-### Features
-- 🧾 GST Billing & E-Invoicing
-- 📦 Inventory Management
-- 📊 Double-Entry Accounting
-- 🤖 AI Accounting Assistant
-- 💳 Payment Gateway (Razorpay)
-- 📈 Reports & Analytics
-    """,
+    description="FinFlow - AI-Powered Accounting for Indian Small Businesses",
     version=settings.APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -105,7 +111,7 @@ A modern alternative to Tally with AI-first features.
 )
 
 
-# ── CORS ─────────────────────────────────────────────────────
+# -- CORS --
 def _parse_origins(raw: str) -> list:
     raw = raw.strip()
     if not raw:
@@ -118,6 +124,7 @@ def _parse_origins(raw: str) -> list:
         except Exception:
             pass
     return [o.strip().strip("\"'") for o in raw.split(",") if o.strip()]
+
 
 _origins = _parse_origins(settings.ALLOWED_ORIGINS)
 app.add_middleware(
@@ -133,11 +140,11 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 
-# ── Routes ───────────────────────────────────────────────────
+# -- Routes --
 app.include_router(api_router, prefix="/api/v1")
 
 
-# ── Health endpoints ─────────────────────────────────────────
+# -- Health endpoints --
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {
@@ -150,4 +157,4 @@ async def health_check():
 @app.get("/ping", tags=["Health"])
 async def ping():
     """Keep-alive for Render free tier (use cron-job.org to ping every 14 min)."""
-    return "pong
+    return "pong"
