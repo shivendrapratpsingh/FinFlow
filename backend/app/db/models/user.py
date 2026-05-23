@@ -3,6 +3,7 @@ FinFlow — User & Business Models
 Multi-tenant: one user can own/belong to multiple businesses.
 """
 import enum
+from typing import Optional
 from sqlalchemy import Column, String, Boolean, Enum, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -49,8 +50,18 @@ class User(Base):
     preferences = Column(JSON, default={})
 
     # Relationships
-    business_memberships = relationship("BusinessMember", back_populates="user")
+    business_memberships = relationship("BusinessMember", back_populates="user", lazy="selectin")
     audit_logs = relationship("AuditLog", back_populates="user")
+
+    @property
+    def active_business_id(self) -> Optional[str]:
+        """Return the user's default business ID."""
+        if not self.business_memberships:
+            return None
+        for mem in self.business_memberships:
+            if mem.is_default:
+                return mem.business_id
+        return self.business_memberships[0].business_id
 
     def __repr__(self):
         return f"<User {self.email or self.phone}>"
@@ -63,7 +74,7 @@ class Business(Base):
     # Basic Info
     name = Column(String(255), nullable=False)
     legal_name = Column(String(255), nullable=True)
-    type = Column(String(50), default="sole_proprietorship")  # pvt_ltd, llp, etc.
+    type = Column(String(50), default="sole_proprietorship")
     industry = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
 
@@ -95,7 +106,7 @@ class Business(Base):
     # Branding
     logo_url = Column(String(500), nullable=True)
     invoice_prefix = Column(String(20), default="INV")
-    financial_year_start = Column(String(5), default="04-01")  # MM-DD
+    financial_year_start = Column(String(5), default="04-01")
     currency = Column(String(3), default="INR")
 
     # Settings
@@ -113,13 +124,13 @@ class Business(Base):
 
 
 class BusinessMember(Base):
-    """Many-to-many: User ↔ Business with role."""
+    """Many-to-many: User <-> Business with role."""
     __tablename__ = "business_members"
 
     user_id = Column(ForeignKey("users.id"), nullable=False, index=True)
     business_id = Column(ForeignKey("businesses.id"), nullable=False, index=True)
     role = Column(Enum(UserRole), default=UserRole.STAFF)
-    is_default = Column(Boolean, default=False)  # default business for user
+    is_default = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="business_memberships")
     business = relationship("Business", back_populates="members")

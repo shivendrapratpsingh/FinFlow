@@ -3,7 +3,6 @@ FinFlow — Billing & Invoice Models
 Supports GST invoices, credit notes, payment tracking.
 """
 import enum
-from decimal import Decimal
 from sqlalchemy import (
     Column, String, Numeric, Integer, Boolean, Enum,
     ForeignKey, Text, JSON, Date
@@ -36,30 +35,23 @@ class Customer(Base):
     __tablename__ = "customers"
 
     business_id = Column(ForeignKey("businesses.id"), nullable=False, index=True)
-
-    # Identity
     name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
     company_name = Column(String(255), nullable=True)
     gstin = Column(String(15), nullable=True, index=True)
     pan = Column(String(10), nullable=True)
-
-    # Address
     address_line1 = Column(String(255), nullable=True)
     address_line2 = Column(String(255), nullable=True)
     city = Column(String(100), nullable=True)
     state = Column(String(100), nullable=True)
     pincode = Column(String(10), nullable=True)
     country = Column(String(100), default="India")
-
-    # Financial
     credit_limit = Column(Numeric(15, 2), default=0)
     outstanding_amount = Column(Numeric(15, 2), default=0)
     total_business = Column(Numeric(15, 2), default=0)
-
     notes = Column(Text, nullable=True)
-    tags = Column(JSON, default=[])
+    tags = Column(JSON, default=list)
     is_active = Column(Boolean, default=True)
 
     business = relationship("Business", back_populates="customers")
@@ -77,8 +69,9 @@ class Invoice(Base):
     customer_id = Column(ForeignKey("customers.id"), nullable=True, index=True)
     created_by_id = Column(ForeignKey("users.id"), nullable=False)
 
-    # Invoice Meta
+    # Invoice meta
     invoice_number = Column(String(50), nullable=False, index=True)
+    customer_name = Column(String(255), nullable=True)   # denormalized
     invoice_type = Column(Enum(InvoiceType), default=InvoiceType.SALE)
     status = Column(Enum(InvoiceStatus), default=InvoiceStatus.DRAFT, index=True)
 
@@ -87,8 +80,8 @@ class Invoice(Base):
     due_date = Column(Date, nullable=True)
     supply_date = Column(Date, nullable=True)
 
-    # Amounts (all in INR / business currency)
-    subtotal = Column(Numeric(15, 2), default=0)     # before tax
+    # Amounts
+    subtotal = Column(Numeric(15, 2), default=0)
     discount_amount = Column(Numeric(15, 2), default=0)
     taxable_amount = Column(Numeric(15, 2), default=0)
     cgst_amount = Column(Numeric(15, 2), default=0)
@@ -104,7 +97,7 @@ class Invoice(Base):
     # GST
     place_of_supply = Column(String(100), nullable=True)
     reverse_charge = Column(Boolean, default=False)
-    is_igst = Column(Boolean, default=False)  # inter-state supply
+    is_igst = Column(Boolean, default=False)
 
     # Payment
     payment_terms = Column(String(100), nullable=True)
@@ -140,19 +133,16 @@ class InvoiceLineItem(Base):
     invoice_id = Column(ForeignKey("invoices.id"), nullable=False, index=True)
     product_id = Column(ForeignKey("products.id"), nullable=True)
 
-    # Item details
     description = Column(String(500), nullable=False)
     hsn_sac_code = Column(String(10), nullable=True)
     quantity = Column(Numeric(15, 3), nullable=False, default=1)
     unit = Column(String(20), default="pcs")
     rate = Column(Numeric(15, 2), nullable=False)
 
-    # Discount
     discount_percent = Column(Numeric(5, 2), default=0)
     discount_amount = Column(Numeric(15, 2), default=0)
 
-    # Tax
-    gst_rate = Column(Numeric(5, 2), default=0)   # e.g. 18.00 for 18%
+    gst_rate = Column(Numeric(5, 2), default=0)
     cgst_rate = Column(Numeric(5, 2), default=0)
     sgst_rate = Column(Numeric(5, 2), default=0)
     igst_rate = Column(Numeric(5, 2), default=0)
@@ -160,7 +150,6 @@ class InvoiceLineItem(Base):
     sgst_amount = Column(Numeric(15, 2), default=0)
     igst_amount = Column(Numeric(15, 2), default=0)
 
-    # Totals
     taxable_amount = Column(Numeric(15, 2), nullable=False)
     total_amount = Column(Numeric(15, 2), nullable=False)
     sort_order = Column(Integer, default=0)
@@ -177,14 +166,12 @@ class Payment(Base):
     invoice_id = Column(ForeignKey("invoices.id"), nullable=True, index=True)
     customer_id = Column(ForeignKey("customers.id"), nullable=True)
 
-    # Payment details
     amount = Column(Numeric(15, 2), nullable=False)
     payment_date = Column(Date, nullable=False)
-    payment_method = Column(String(50), default="cash")  # cash, upi, bank, card
-    reference_number = Column(String(100), nullable=True)  # UTR, cheque no etc.
+    payment_method = Column(String(50), default="cash")
+    reference_number = Column(String(100), nullable=True)
 
-    # Gateway info
-    gateway = Column(String(50), nullable=True)  # razorpay, stripe
+    gateway = Column(String(50), nullable=True)
     gateway_payment_id = Column(String(100), nullable=True)
     gateway_status = Column(String(50), nullable=True)
 

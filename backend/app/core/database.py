@@ -1,6 +1,8 @@
 """
-FinFlow — Async Database Setup (SQLAlchemy + asyncpg)
+FinFlow — Async Database Setup
+Supports both SQLite (local dev, zero config) and PostgreSQL (production).
 """
+import re
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -9,47 +11,53 @@ from sqlalchemy import Column, DateTime, func, String
 import uuid
 
 from app.core.config import settings
-import re as _re
 
 
 def _prepare_db(raw: str):
     """
-    Accept ANY Postgres URL from Neon/Railway/etc and return
-    (clean_url, connect_args) ready for asyncpg.
-    Strips all SSL/channel_binding params from the URL and
-    passes ssl via connect_args instead.
+    Accept SQLite or any Postgres URL and return (url, connect_args, kwargs).
+    - sqlite+aiosqlite:///./finflow.db  → local SQLite, no extra args
+    - postgres://... / postgresql://... → asyncpg with optional SSL
     """
     url = raw.strip()
 
-    # Detect if SSL is needed (Neon always needs it)
-    needs_ssl = any(k in url for k in ("sslmode", "ssl=", "neon.tech", "channel_binding"))
+    # ── SQLite ───────────────────────────────────────────────
+    if url.startswith("sqlite"):
+        if "aiosqlite" not in url:
+            url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+        return url, {"check_same_thread": False}, {}
 
-    # Strip ALL query params that asyncpg doesn't understand in URL form
-    url = _re.sub(r"[?&](sslmode|ssl|channel_binding|options)=[^&]*", "", url)
+    # ── PostgreSQL ───────────────────────────────────────────
+    needs_ssl = any(k in url for k in ("sslmode", "ssl=", "neon.tech", "channel_binding"))
+    url = re.sub(r"[?&](sslmode|ssl|channel_binding|options)=[^&]*", "", url)
     url = url.rstrip("?&")
 
-    # Fix scheme → postgresql+asyncpg://
     if url.startswith("postgres://"):
         url = "postgresql+asyncpg://" + url[len("postgres://"):]
     elif url.startswith("postgresql://") and "+asyncpg" not in url:
         url = "postgresql+asyncpg://" + url[len("postgresql://"):]
 
     connect_args = {"ssl": "require"} if needs_ssl else {}
-    return url, connect_args
+    return url, connect_args, {}
 
 
-_db_url, _connect_args = _prepare_db(settings.DATABASE_URL)
+_db_url, _connect_args, _extra_kwargs = _prepare_db(settings.DATABASE_URL)
+_is_sqlite = "sqlite" in _db_url
 
 # ── Engine ───────────────────────────────────────────────────
-engine = create_async_engine(
-    _db_url,
-    connect_args=_connect_args,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    echo=(settings.APP_ENV == "development"),
-    future=True,
-)
+_engine_kwargs = {
+    "connect_args": _connect_args,
+    "pool_pre_ping": True,
+    "echo": (settings.APP_ENV == "development"),
+    "future": True,
+    **_extra_kwargs,
+}
+# SQLite doesn't support pool_size / max_overflow
+if not _is_sqlite:
+    _engine_kwargs["pool_size"] = settings.DATABASE_POOL_SIZE
+    _engine_kwargs["max_overflow"] = settings.DATABASE_MAX_OVERFLOW
+
+engine = create_async_engine(_db_url, **_engine_kwargs)
 
 # ── Session Factory ──────────────────────────────────────────
 AsyncSessionLocal = async_sessionmaker(
@@ -63,14 +71,10 @@ AsyncSessionLocal = async_sessionmaker(
 
 # ── Base Model ───────────────────────────────────────────────
 class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy models."""
 
     @declared_attr
     def __tablename__(cls) -> str:
-        """Auto-generate table name from class name."""
-        import re
         name = cls.__name__
-        # CamelCase → snake_case
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
@@ -86,7 +90,6 @@ class Base(DeclarativeBase):
 
 # ── Dependency ───────────────────────────────────────────────
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that provides a database session."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

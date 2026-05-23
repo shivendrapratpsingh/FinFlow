@@ -1,24 +1,15 @@
 """
-FinFlow — Main FastAPI Application Entry Point
+FinFlow — Main FastAPI Application
+AI-powered accounting platform for Indian small businesses.
+Free-tier ready: runs on SQLite locally, PostgreSQL on Render/Neon.
 """
+import json
+import logging
 from contextlib import asynccontextmanager
-
-try:
-    import sentry_sdk
-    SENTRY_AVAILABLE = True
-except ImportError:
-    SENTRY_AVAILABLE = False
-
-try:
-    from prometheus_fastapi_instrumentator import Instrumentator
-    PROMETHEUS_AVAILABLE = True
-except ImportError:
-    PROMETHEUS_AVAILABLE = False
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -26,74 +17,58 @@ from app.core.database import engine, Base
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 
-
-# ── Sentry (production only) ─────────────────────────────────
-if SENTRY_AVAILABLE and settings.SENTRY_DSN and settings.APP_ENV == "production":
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        traces_sample_rate=0.1,
-        environment=settings.APP_ENV,
-    )
+logger = logging.getLogger("finflow")
 
 
 # ── Lifespan ─────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup and shutdown events."""
-    # Startup
-    print(f"🚀 FinFlow {settings.APP_VERSION} starting up...")
+    logger.info(f"FinFlow {settings.APP_VERSION} starting ({settings.APP_ENV})")
+    # Auto-create tables (SQLite dev) or use Alembic in production
     async with engine.begin() as conn:
-        # Create tables if they don't exist (use Alembic in production)
-        if settings.APP_ENV == "development":
-            await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables ready")
     yield
-    # Shutdown
-    print("👋 FinFlow shutting down...")
+    logger.info("FinFlow shutting down")
     await engine.dispose()
 
 
-# ── App Instance ─────────────────────────────────────────────
+# ── App ──────────────────────────────────────────────────────
 app = FastAPI(
     title="FinFlow API",
     description="""
-    ## FinFlow — AI-Powered Accounting Platform for Small Businesses
+## FinFlow — AI-Powered Accounting for Indian Small Businesses
 
-    A modern, cloud-native alternative to Tally with AI-first features.
+A modern alternative to Tally with AI-first features.
 
-    ### Features
-    - 🧾 Smart Billing & GST Invoicing
-    - 📦 Inventory Management
-    - 📊 Double-Entry Accounting
-    - 🤖 AI Accounting Assistant
-    - 🔍 OCR Document Scanning
-    - 💳 Payment Gateway Integration
+### Features
+- 🧾 GST Billing & E-Invoicing
+- 📦 Inventory Management
+- 📊 Double-Entry Accounting
+- 🤖 AI Accounting Assistant
+- 💳 Payment Gateway (Razorpay)
+- 📈 Reports & Analytics
     """,
     version=settings.APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 
 
-# ── Parse ALLOWED_ORIGINS (stored as plain string) ───────────
-import json as _json
-
+# ── CORS ─────────────────────────────────────────────────────
 def _parse_origins(raw: str) -> list:
     raw = raw.strip()
     if raw.startswith("["):
         try:
-            return _json.loads(raw)
+            return json.loads(raw)
         except Exception:
             pass
     return [o.strip().strip("\"'") for o in raw.split(",") if o.strip()]
 
-_origins = _parse_origins(settings.ALLOWED_ORIGINS)
-
-# ── Middleware ───────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins,
+    allow_origins=_parse_origins(settings.ALLOWED_ORIGINS),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -102,23 +77,12 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
-if settings.APP_ENV == "production":
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["finflow.app", "*.finflow.app"],
-    )
-
-
-# ── Prometheus Metrics ───────────────────────────────────────
-if PROMETHEUS_AVAILABLE:
-    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
-
 
 # ── Routes ───────────────────────────────────────────────────
 app.include_router(api_router, prefix="/api/v1")
 
 
-# ── Health Check ─────────────────────────────────────────────
+# ── Health endpoints ─────────────────────────────────────────
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {
@@ -130,7 +94,7 @@ async def health_check():
 
 @app.get("/ping", tags=["Health"])
 async def ping():
-    """Lightweight keep-alive endpoint. Use with cron-job.org to prevent Render sleep."""
+    """Keep-alive for Render free tier (use cron-job.org to ping every 14 min)."""
     return "pong"
 
 

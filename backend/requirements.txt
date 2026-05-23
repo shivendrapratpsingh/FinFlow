@@ -1,6 +1,6 @@
 # ================================================================
 # FinFlow Backend — Python Dependencies
-# Using loose versions to avoid Docker build conflicts
+# Free-tier ready: works on Render.com without Redis or OpenAI
 # ================================================================
 
 # ── Web Framework ─────────────────────────────────────────────
@@ -13,27 +13,19 @@ httpx
 # ── Database ──────────────────────────────────────────────────
 sqlalchemy[asyncio]
 asyncpg
+aiosqlite
 alembic
-
-# ── Redis ─────────────────────────────────────────────────────
-redis[hiredis]
 
 # ── Auth / Security ───────────────────────────────────────────
 python-jose[cryptography]
 bcrypt
 cryptography
+passlib[bcrypt]
 
 # ── Validation ────────────────────────────────────────────────
 pydantic>=2.0
 pydantic-settings>=2.0
 email-validator
-
-# ── AI / LLM ──────────────────────────────────────────────────
-openai>=1.0
-langchain
-langchain-openai
-langchain-community
-tiktoken
 
 # ── PDF & Documents ───────────────────────────────────────────
 reportlab
@@ -43,12 +35,6 @@ Pillow
 # ── Data ──────────────────────────────────────────────────────
 openpyxl
 pandas
-
-# ── Background Tasks ──────────────────────────────────────────
-celery[redis]
-
-# ── Payments ──────────────────────────────────────────────────
-razorpay
 
 # ── HTTP / Async ──────────────────────────────────────────────
 aiohttp
@@ -65,3 +51,11 @@ loguru
 pytest
 pytest-asyncio
 faker
+
+# ================================================================
+# OPTIONAL — install only if you need the feature:
+# pip install openai langchain langchain-openai   (AI assistant)
+# pip install celery[redis] redis[hiredis]        (background tasks)
+# pip install razorpay                            (Razorpay payments)
+# pip install twilio                              (SMS alerts)
+# ================================================================

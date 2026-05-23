@@ -6,6 +6,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "http", hostname: "localhost" },
       { protocol: "https", hostname: "**.railway.app" },
+      { protocol: "https", hostname: "**.onrender.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
       { protocol: "https", hostname: "s3.ap-south-1.amazonaws.com" },
     ],
