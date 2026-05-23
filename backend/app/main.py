@@ -47,15 +47,16 @@ async def _seed_admin():
             {"email": ADMIN_EMAIL},
         )
         existing = row.fetchone()
-
         hashed = hash_pw(ADMIN_PASSWORD)
 
         if existing:
             # Always refresh the admin password so it matches our seed
+            # NOTE: auth_provider is a PostgreSQL enum — must CAST explicitly
             await db.execute(
                 text(
                     "UPDATE users SET hashed_password = :pwd, is_verified = true, "
-                    "is_active = true, auth_provider = :provider WHERE email = :email"
+                    "is_active = true, auth_provider = CAST(:provider AS authprovider) "
+                    "WHERE email = :email"
                 ),
                 {"pwd": hashed, "provider": "email", "email": ADMIN_EMAIL},
             )
@@ -68,12 +69,14 @@ async def _seed_admin():
         biz_id = str(uuid.uuid4())
         mem_id = str(uuid.uuid4())
 
+        # NOTE: auth_provider is a PostgreSQL enum — must CAST explicitly
         await db.execute(
             text(
                 "INSERT INTO users "
                 "(id, email, full_name, hashed_password, is_verified, "
                 "is_active, auth_provider, language, created_at, updated_at) "
-                "VALUES (:id, :email, :name, :pwd, true, true, :provider, :lang, "
+                "VALUES (:id, :email, :name, :pwd, true, true, "
+                "CAST(:provider AS authprovider), :lang, "
                 "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             ),
             {
@@ -94,11 +97,13 @@ async def _seed_admin():
             {"id": biz_id, "name": "My Business"},
         )
 
+        # NOTE: role is a PostgreSQL enum — must CAST explicitly
         await db.execute(
             text(
                 "INSERT INTO business_members "
                 "(id, user_id, business_id, role, is_default, created_at, updated_at) "
-                "VALUES (:id, :uid, :bid, :role, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                "VALUES (:id, :uid, :bid, CAST(:role AS userrole), true, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             ),
             {"id": mem_id, "uid": user_id, "bid": biz_id, "role": "owner"},
         )
