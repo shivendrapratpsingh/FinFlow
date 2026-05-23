@@ -4,7 +4,6 @@ Loads settings from environment variables with validation.
 """
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, validator
 
 
 class Settings(BaseSettings):
@@ -29,23 +28,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # ── CORS ─────────────────────────────────────────────────
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
-
-    @validator("ALLOWED_ORIGINS", pre=True)
-    def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            v = v.strip()
-            # Handle JSON array format: ["origin1","origin2"]
-            if v.startswith("["):
-                import json
-                try:
-                    return json.loads(v)
-                except Exception:
-                    pass
-            # Handle comma-separated: origin1,origin2
-            return [o.strip().strip('"\'') for o in v.split(",") if o.strip()]
-        return v
+    # ── CORS — stored as plain string, parsed in main.py ─────
+    # Set in Render as:  https://your-app.vercel.app,http://localhost:3000
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
 
     # ── AI ───────────────────────────────────────────────────
     OPENAI_API_KEY: str = ""
