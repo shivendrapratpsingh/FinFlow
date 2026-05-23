@@ -36,10 +36,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
 RUN useradd --create-home --shell /bin/bash appuser
+
+# Create upload dirs as root, then hand ownership to appuser
+RUN mkdir -p uploads/documents uploads/temp && \
+    chown -R appuser:appuser /app
+
 USER appuser
 
 COPY --chown=appuser:appuser . .
-RUN mkdir -p uploads/documents uploads/temp
 
 EXPOSE 8000
 
