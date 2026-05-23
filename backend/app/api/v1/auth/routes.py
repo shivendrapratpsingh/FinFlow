@@ -352,3 +352,54 @@ async def login_json(
         user=UserResponse.model_validate(user),
         business_id=business_id,
     )
+
+
+@router.get("/debug-reset-admin")
+async def debug_reset_admin(db: AsyncSession = Depends(get_db)):
+    """
+    ONE-TIME: Force-reset admin password to FinFlow@123.
+    Remove this endpoint after first successful login.
+    """
+    import os, base64, hashlib, bcrypt
+    from sqlalchemy import text
+
+    admin_email = "pratapsinghshivendra21@gmail.com"
+
+    def hash_pw(p: str) -> str:
+        digest = base64.b64encode(hashlib.sha256(p.encode()).digest())
+        return bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
+
+    hashed = hash_pw("FinFlow@123")
+
+    # Try update first
+    result = await db.execute(
+        text("UPDATE users SET hashed_password = :pwd, is_verified = true, is_active = true WHERE email = :email"),
+        {"pwd": hashed, "email": admin_email},
+    )
+
+    if result.rowcount == 0:
+        # User doesn't exist — insert
+        import uuid
+        uid = str(uuid.uuid4())
+        bid = str(uuid.uuid4())
+        mid = str(uuid.uuid4())
+        await db.execute(
+            text(
+                "INSERT INTO users (id, email, full_name, hashed_password, is_verified, is_active, auth_provider, language, created_at, updated_at) "
+                "VALUES (:id, :email, :name, :pwd, true, true, :prov, :lang, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": uid, "email": admin_email, "name": "Shivendra Pratap", "pwd": hashed, "prov": "email", "lang": "en"},
+        )
+        await db.execute(
+            text("INSERT INTO businesses (id, name, created_at, updated_at) VALUES (:id, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"),
+            {"id": bid, "name": "My Business"},
+        )
+        await db.execute(
+            text("INSERT INTO business_members (id, user_id, business_id, role, is_default, created_at, updated_at) VALUES (:id, :uid, :bid, :role, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"),
+            {"id": mid, "uid": uid, "bid": bid, "role": "owner"},
+        )
+        await db.commit()
+        return {"status": "created", "email": admin_email, "password": "FinFlow@123"}
+
+    await db.commit()
+    return {"status": "reset", "email": admin_email, "password": "FinFlow@123"}
