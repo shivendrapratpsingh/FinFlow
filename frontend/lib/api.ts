@@ -1,7 +1,8 @@
 import axios from "axios";
 import { useAuthStore } from "@/store/slices/authStore";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Empty string = relative URL → hits Next.js API routes on same domain (free, no backend needed)
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export const apiClient = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
@@ -35,7 +36,7 @@ apiClient.interceptors.response.use(
 
       if (refreshToken) {
         try {
-          const res = await axios.post(`${BASE_URL}/api/v1/auth/refresh`, {
+          const res = await axios.post(`${BASE_URL || ""}/api/v1/auth/refresh`, {
             refresh_token: refreshToken,
           });
           const { access_token, refresh_token } = res.data;
@@ -64,6 +65,4 @@ export const api = {
     apiClient.put<T>(url, data).then((r) => r.data),
   delete: <T>(url: string) =>
     apiClient.delete<T>(url).then((r) => r.data),
-  patch: <T>(url: string, data?: object) =>
-    apiClient.patch<T>(url, data).then((r) => r.data),
-};
+  patch: <T>(url:
